@@ -1,0 +1,78 @@
+% nialist - irc bot written in nial
+%
+%  (c) 2014 michal j wallace <http://tangentstorm.com/>
+%  available for use under the zlib license.
+%  http://opensource.org/licenses/zlib
+
+# The bot responds to commands starting with ': ' (colon and space).
+
+
+%-- string operations ------------------------------------------
+
+startswith is op x y {
+  if tally y > tally x then o else tally y reshape x = y endif }
+
+explode is op s { ' ' match s cut s }
+
+implode is op wds { rest link (' ' eachright link wds) }
+
+%-- irc protocol -----------------------------------------------
+
+sock done := 0 0;
+
+send is op s {
+  msg := (link s) link (char 13 10);
+  socket_send sock msg o }
+
+say is op chan s {
+  send link 'PRIVMSG ' chan ' :' s }
+
+quit is op x {
+  nonlocal done; done := l;
+  send 'QUIT'; }
+
+
+% -- command dispatch ------------------------------------------
+
+handle is op chan words {
+   head := first words;
+   tail := rest words;
+   if head = ('::') then
+     % at some point, this would execute nial commands ;
+     say chan (implode tail)
+   elseif head = (':::') then
+     case tail @ 0 from
+       'quit' : quit'' end
+       else  say chan 'unknown command'
+     endcase
+   endif }
+
+% -- main program ----------------------------------------------
+
+go is op nick chan {
+  nonlocal sock line;
+  sock := socket_connect 'irc.freenode.net' 6667;
+  check_socket sock;
+  send 'USER ' nick ' 8 * :' nick;
+  send 'NICK ' nick;
+  send 'JOIN ' chan;
+  n := 0;
+  while l do
+    line := socket_getline sock o o o;
+    if tally line > 1 then
+      words := explode line;
+      write line;
+      % write link '(' (words @ 1) ')';
+      case words @ 1 from
+        'PING'
+          : send 'PONG ' words@1
+          end
+        'PRIVMSG'
+          : handle hitch[first, [rest]] rest rest words
+          end
+        else write '(--- unable to match ---)'
+      endcase
+    endif
+  endwhile }
+
+% example usage: go 'nialist' '#nial';
